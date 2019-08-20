@@ -117,7 +117,8 @@ def train(epoch):
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.data[0]))
+                100. * batch_idx / len(train_loader),
+                loss.item()))
 
 def test():
     model.eval()
@@ -126,23 +127,23 @@ def test():
     for data, target in test_loader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
-        data, target = Variable(data, volatile=True), Variable(target)
+        with torch.no_grad():
+            data, target = Variable(data), Variable(target)
         output = model(data)
-        test_loss += F.cross_entropy(output, target, size_average=False).data[0] # sum up batch loss
+        test_loss += F.cross_entropy(output, target, size_average=False).item() # sum up batch loss
         pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
         correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-
     test_loss /= len(test_loader.dataset)
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.1f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
-    return correct / float(len(test_loader.dataset))
+        100. * correct.int() / len(test_loader.dataset)))
+    return correct.float() / float(len(test_loader.dataset))
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+        shutil.copyfile(filename, filename.split('.')[0]+'_model_best.pth.tar')#此处为何没有拷贝保存
 
 best_prec1 = 0.
 for epoch in range(args.start_epoch, args.epochs):
@@ -150,12 +151,20 @@ for epoch in range(args.start_epoch, args.epochs):
         for param_group in optimizer.param_groups:
             param_group['lr'] *= 0.1
     train(epoch)
-    prec1 = test()
+    prec1 = test().item()
     is_best = prec1 > best_prec1
     best_prec1 = max(prec1, best_prec1)
-    save_checkpoint({
-        'epoch': epoch + 1,
-        'state_dict': model.state_dict(),
-        'best_prec1': best_prec1,
-        'optimizer': optimizer.state_dict(),
-    }, is_best)
+    if args.sr:
+        save_checkpoint({
+            'epoch': epoch + 1,
+            'state_dict': model.state_dict(),
+            'best_prec1': best_prec1,
+            'optimizer': optimizer.state_dict(),
+        }, is_best,"checkpoint_sparsity.pth.tar")
+    else:
+        save_checkpoint({
+            'epoch': epoch + 1,
+            'state_dict': model.state_dict(),
+            'best_prec1': best_prec1,
+            'optimizer': optimizer.state_dict(),
+        }, is_best)
