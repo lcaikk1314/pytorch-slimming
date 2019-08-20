@@ -50,6 +50,13 @@ python prune.py --model model_best.pth.tar --save pruned.pth.tar --percent 0.7
 python main.py -refine pruned.pth.tar --epochs 40
 ```
 
+## 需要改进位置
+1）cfg应该适当控制，防止某一层被减少为0
+
+## 内部主要涉及知识点
+1）L1正则化及反向传播；
+2）如何将保留的对应通道拷贝下来；
+
 ## Reference
 
 ```

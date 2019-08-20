@@ -107,19 +107,21 @@ def test():
 
 test()
 
+##需要控制cfg，防止内部某些通道数目被减少到0，否则会出错
+
 
 # Make real prune
 print(cfg)
 newmodel = vgg(cfg=cfg)#####这样使用要求每一个卷积之后都有batchnorm,否则网络对不起来
 newmodel.cuda()
 
-#主要记录如何将权值拷贝过来
+#主要记录如何将权值拷贝过来，针对batchnorm、卷积、全链接层
 layer_id_in_cfg = 0
 start_mask = torch.ones(3)
-end_mask = cfg_mask[layer_id_in_cfg]
+end_mask = cfg_mask[layer_id_in_cfg]#cfg_mask记录了需要保留的通道序号
 for [m0, m1] in zip(model.modules(), newmodel.modules()):
     if isinstance(m0, nn.BatchNorm2d):
-        idx1 = np.squeeze(np.argwhere(np.asarray(end_mask.cpu().numpy())))
+        idx1 = np.squeeze(np.argwhere(np.asarray(end_mask.cpu().numpy())))#np.argwhere--返回非0的数组元组的索引，np.squeeze--即把shape中为1的维度去掉
         m1.weight.data = m0.weight.data[idx1].clone()
         m1.bias.data = m0.bias.data[idx1].clone()
         m1.running_mean = m0.running_mean[idx1].clone()
