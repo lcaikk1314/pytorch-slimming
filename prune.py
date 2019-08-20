@@ -41,11 +41,12 @@ if args.model:
         print("=> no checkpoint found at '{}'".format(args.resume))
 
 print(model)
+#计算scale个数
 total = 0
 for m in model.modules():
     if isinstance(m, nn.BatchNorm2d):
         total += m.weight.data.shape[0]
-
+#将所有scale值拷贝到bn中
 bn = torch.zeros(total)
 index = 0
 for m in model.modules():
@@ -53,11 +54,11 @@ for m in model.modules():
         size = m.weight.data.shape[0]
         bn[index:(index+size)] = m.weight.data.abs().clone()
         index += size
-
+#排序，根据要裁剪的比例计算筛选阈值
 y, i = torch.sort(bn)
 thre_index = int(total * args.percent)
 thre = y[thre_index]
-
+#根据阈值将小于阈值的各通道参数全部处理设置成0
 pruned = 0
 cfg = []
 cfg_mask = []
@@ -66,22 +67,22 @@ for k, m in enumerate(model.modules()):
         weight_copy = m.weight.data.clone()
         thre=thre.cuda()
         mask = weight_copy.abs().gt(thre).float().cuda()
-        #mask = torch.gt(weight_copy.abs(),thre).float().cuda()
+        #mask = torch.gt(weight_copy.abs(),thre).float().cuda()#torch.gt逐个元素比较,mask记录需要保存的通道，保存通道为1，不保存的为0
         pruned = pruned + mask.shape[0] - torch.sum(mask)
-        m.weight.data.mul_(mask)
+        m.weight.data.mul_(mask)#将需要删除的通道进行掩模处理为0
         m.bias.data.mul_(mask)
-        cfg.append(int(torch.sum(mask)))
+        cfg.append(int(torch.sum(mask))) #内部记录需要保留通道的数目，只有用 batchnorm时才有值，加入有卷积之后没有batchnorm则可能有问题，但VGG不存在这种情况
         cfg_mask.append(mask.clone())
         print('layer index: {:d} \t total channel: {:d} \t remaining channel: {:d}'.
             format(k, mask.shape[0], int(torch.sum(mask))))
-    elif isinstance(m, nn.MaxPool2d):
+    elif isinstance(m, nn.MaxPool2d):###########这一步为了做什么？？
         cfg.append('M')
 
 pruned_ratio = pruned/total
 
 print('Pre-processing Successful!')
 
-
+#测试将低于阈值的通道抹除之后的测试精度
 # simple test model after Pre-processing prune (simple set BN scales to zeros)
 def test():
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
@@ -109,9 +110,10 @@ test()
 
 # Make real prune
 print(cfg)
-newmodel = vgg(cfg=cfg)
+newmodel = vgg(cfg=cfg)#####这样使用要求每一个卷积之后都有batchnorm,否则网络对不起来
 newmodel.cuda()
 
+#主要记录如何将权值拷贝过来
 layer_id_in_cfg = 0
 start_mask = torch.ones(3)
 end_mask = cfg_mask[layer_id_in_cfg]
