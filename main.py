@@ -111,7 +111,7 @@ def train(epoch):
         output = model(data)
         loss = F.cross_entropy(output, target)
         loss.backward()
-        if args.sr:
+        if args.sr:##############启用稀疏化训练，只用这一行代码，对scale进行L1正则化
             updateBN()
         optimizer.step()
         if batch_idx % args.log_interval == 0:

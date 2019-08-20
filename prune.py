@@ -64,7 +64,9 @@ cfg_mask = []
 for k, m in enumerate(model.modules()):
     if isinstance(m, nn.BatchNorm2d):
         weight_copy = m.weight.data.clone()
+        thre=thre.cuda()
         mask = weight_copy.abs().gt(thre).float().cuda()
+        #mask = torch.gt(weight_copy.abs(),thre).float().cuda()
         pruned = pruned + mask.shape[0] - torch.sum(mask)
         m.weight.data.mul_(mask)
         m.bias.data.mul_(mask)
