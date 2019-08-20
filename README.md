@@ -29,6 +29,9 @@ This is a **[PyTorch](http://pytorch.org/)** _re_-implementation of algorithm pr
 python main.py
 ```
 
+##经过验证：不使用稀疏训练，可以裁剪的通道数在10%左右（不影响精度）；使用稀疏训练的，可以裁剪的通道数在50%左右（不影响精度）；
+
+
 ## Trained with Sparsity
 
 ```shell
