@@ -33,7 +33,7 @@ class vgg(nn.Module):
                 else:
                     layers += [conv2d, nn.ReLU(inplace=True)]
                 in_channels = v
-        return nn.Sequential(*layers)
+        return nn.Sequential(*layers) ## 将不定数量的参数传递给函数，*args 对元组解引用，**args 对字典解引用；**
 
     def forward(self, x):
         x = self.feature(x)

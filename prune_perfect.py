@@ -1,3 +1,9 @@
+'''
+相比prune.py做了如下改进：
+1）限制不能将某一层完全裁掉；
+2）每一层通道数务必是8的整数倍，打印出目标裁剪比例、与实际裁剪比例；
+3）循环裁剪，确定最优的裁剪比例；
+'''
 import os
 import argparse
 import torch
@@ -65,10 +71,26 @@ cfg_mask = []#记录保留通道的位置
 for k, m in enumerate(model.modules()):
     if isinstance(m, nn.BatchNorm2d): ##原则上batchnorm在conv之后
         weight_copy = m.weight.data.clone()
+        ## 此处增加一个阈值再确定函数接口，为了保证通道数为8的整数倍且不为0。做法、先计算按阈值裁剪后的通道数目，进行通道数目调整(保证为8的整数倍且不为0)，然后对该层权值进行重新排序选取阈值，保证该阈值
+        thre_layer = thre
         thre=thre.cuda()
         mask = weight_copy.abs().gt(thre).float().cuda()
-        #mask = torch.gt(weight_copy.abs(),thre).float().cuda()#torch.gt逐个元素比较,mask记录需要保存的通道，保存通道为1，不保存的为0
-        ## 待改进1 ：裁剪后通道数是8的整数倍、不能整层裁剪掉###########################
+        channel_num_ed = torch.sum(mask)
+        if channel_num_ed % 8 !== 0 or channel_num_ed == 0:
+            channel_num_ed = channel_num_ed +(8-channel_num_ed % 8)
+            #计算scale个数
+            total = m.weight.data.shape[0]
+            if channel_num_ed < total :
+                #将所有scale值拷贝到bn中
+                bn = torch.zeros(total)
+                bn[:] = m.weight.data.abs().clone()
+                #排序，根据要裁剪的比例计算筛选阈值
+                y, i = torch.sort(bn)
+                thre_layer = y[total-channel_num_ed-1] ##这里仍然会存在特殊情况，恰巧临界值相等的情况
+            else:
+                thre_layer = 0 #即全部保留
+        thre_layer=thre_layer.cuda()
+        mask = weight_copy.abs().gt(thre_layer).float().cuda()#torch.gt逐个元素比较,mask记录需要保存的通道，保存通道为1，不保存的为0
         pruned = pruned + mask.shape[0] - torch.sum(mask)
         m.weight.data.mul_(mask)#将需要删除的通道进行掩模处理为0,模型就已经被修改了
         m.bias.data.mul_(mask)
@@ -80,7 +102,8 @@ for k, m in enumerate(model.modules()):
         cfg.append('M')
 
 pruned_ratio = pruned/total ##计算裁剪掉的比例
-
+print("pruned_ratio_aim = %f, pruned_ratio_fact = %f\n", %(args.percent,pruned_ratio))
+print("cfg processed: ",cfg)
 print('Pre-processing Successful!')
 
 #测试将低于阈值的通道抹除之后的测试精度

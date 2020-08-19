@@ -69,9 +69,9 @@ test_loader = torch.utils.data.DataLoader(
                    ])),
     batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
-if args.refine:
+if args.refine: # refine代表对裁剪后的模型进行微调，加载的网络及参数均是裁剪之后的；
     checkpoint = torch.load(args.refine)
-    model = vgg(cfg=checkpoint['cfg'])
+    model = vgg(cfg=checkpoint['cfg'])# checkpoint是如何把cfg参数存进去的
     model.cuda()
     model.load_state_dict(checkpoint['state_dict'])
 else:
@@ -79,7 +79,7 @@ else:
 if args.cuda:
     model.cuda()
 
-optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)## 或者 args.wd
 
 if args.resume:
     if os.path.isfile(args.resume):
@@ -98,7 +98,7 @@ if args.resume:
 def updateBN():
     for m in model.modules():
         if isinstance(m, nn.BatchNorm2d):
-            m.weight.grad.data.add_(args.s*torch.sign(m.weight.data))  # L1
+            m.weight.grad.data.add_(args.s*torch.sign(m.weight.data))  # L1，## L1的反向传播原理弄懂 ###########
 
 
 def train(epoch):
