@@ -73,24 +73,29 @@ for k, m in enumerate(model.modules()):
         weight_copy = m.weight.data.clone()
         ## 此处增加一个阈值再确定函数接口，为了保证通道数为8的整数倍且不为0。做法、先计算按阈值裁剪后的通道数目，进行通道数目调整(保证为8的整数倍且不为0)，然后对该层权值进行重新排序选取阈值，保证该阈值
         thre_layer = thre
-        thre=thre.cuda()
-        mask = weight_copy.abs().gt(thre).float().cuda()
+        mask = weight_copy.abs().gt(thre).float()
+        if args.cuda:
+            thre=thre.cuda()
+            mask = mask.cuda()
         channel_num_ed = torch.sum(mask)
-        if channel_num_ed % 8 !== 0 or channel_num_ed == 0:
+        if channel_num_ed % 8 != 0 or channel_num_ed == 0:
             channel_num_ed = channel_num_ed +(8-channel_num_ed % 8)
             #计算scale个数
-            total = m.weight.data.shape[0]
-            if channel_num_ed < total :
+            total_layer = m.weight.data.shape[0]
+            if channel_num_ed < total_layer :
                 #将所有scale值拷贝到bn中
-                bn = torch.zeros(total)
-                bn[:] = m.weight.data.abs().clone()
+                bn_layer = torch.zeros(total_layer)
+                bn_layer[:] = m.weight.data.abs().clone()
                 #排序，根据要裁剪的比例计算筛选阈值
-                y, i = torch.sort(bn)
-                thre_layer = y[total-channel_num_ed-1] ##这里仍然会存在特殊情况，恰巧临界值相等的情况
+                y, i = torch.sort(bn_layer)
+                thre_num = (total_layer-1-channel_num_ed).type(torch.int64)
+                thre_layer = y[thre_num] ##这里仍然会存在特殊情况，恰巧临界值相等的情况
             else:
                 thre_layer = 0 #即全部保留
-        thre_layer=thre_layer.cuda()
-        mask = weight_copy.abs().gt(thre_layer).float().cuda()#torch.gt逐个元素比较,mask记录需要保存的通道，保存通道为1，不保存的为0
+        mask = weight_copy.abs().gt(thre_layer).float()
+        if args.cuda:
+            thre_layer=thre_layer.cuda()
+            mask = mask.cuda()#torch.gt逐个元素比较,mask记录需要保存的通道，保存通道为1，不保存的为0
         pruned = pruned + mask.shape[0] - torch.sum(mask)
         m.weight.data.mul_(mask)#将需要删除的通道进行掩模处理为0,模型就已经被修改了
         m.bias.data.mul_(mask)
@@ -102,7 +107,8 @@ for k, m in enumerate(model.modules()):
         cfg.append('M')
 
 pruned_ratio = pruned/total ##计算裁剪掉的比例
-print("pruned_ratio_aim = %f, pruned_ratio_fact = %f\n", %(args.percent,pruned_ratio))
+print("*"*20)
+print("pruned_ratio_aim = %f, pruned_ratio_fact = %f\n"  %(args.percent,pruned_ratio))
 print("cfg processed: ",cfg)
 print('Pre-processing Successful!')
 
@@ -136,9 +142,10 @@ test()
 # Make real prune
 print(cfg)
 newmodel = vgg(cfg=cfg)#####这样使用要求每一个卷积之后都有batchnorm,否则网络对不起来；这里相当于新建了一个网络结构
-newmodel.cuda()
+if args.cuda:
+    newmodel.cuda()
 
-#主要记录如何将权值拷贝过来，针对batchnorm、卷积、全链接层
+#主要记录如何将权值拷贝过来，针对batchnorm、卷积、全连接层
 layer_id_in_cfg = 0
 start_mask = torch.ones(3) # 为何是3？是第一层卷积的输入通道数
 end_mask = cfg_mask[layer_id_in_cfg]#cfg_mask记录了需要保留的通道序号

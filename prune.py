@@ -115,7 +115,7 @@ print(cfg)
 newmodel = vgg(cfg=cfg)#####这样使用要求每一个卷积之后都有batchnorm,否则网络对不起来；这里相当于新建了一个网络结构
 newmodel.cuda()
 
-#主要记录如何将权值拷贝过来，针对batchnorm、卷积、全链接层
+#主要记录如何将权值拷贝过来，针对batchnorm、卷积、全连接层
 layer_id_in_cfg = 0
 start_mask = torch.ones(3) # 为何是3？是第一层卷积的输入通道数
 end_mask = cfg_mask[layer_id_in_cfg]#cfg_mask记录了需要保留的通道序号
@@ -134,8 +134,8 @@ for [m0, m1] in zip(model.modules(), newmodel.modules()):
         idx0 = np.squeeze(np.argwhere(np.asarray(start_mask.cpu().numpy()))) ## 默认每隔卷积都挨着BN层
         idx1 = np.squeeze(np.argwhere(np.asarray(end_mask.cpu().numpy())))
         print('In shape: {:d} Out shape:{:d}'.format(idx0.shape[0], idx1.shape[0]))
-        w = m0.weight.data[:, idx0, :, :].clone()
-        w = w[idx1, :, :, :].clone()
+        w = m0.weight.data[:, idx0, :, :].clone() #idx0 是输入保存通道的list，注意权值的第一个值对应输出序号，第二个对应输入序号；
+        w = w[idx1, :, :, :].clone() #idx1 是输出保存通道的list
         m1.weight.data = w.clone()
         # m1.bias.data = m0.bias.data[idx1].clone()
     elif isinstance(m0, nn.Linear): #默认全连接层全部在BN层之后
